@@ -572,6 +572,7 @@ impl Rpc {
     }
 
     fn handle_response(&mut self, from: SocketAddrV4, message: Message) -> Option<(Id, Response)> {
+        tracing::info!("Received a response from {}", from);
         // If someone claims to be readonly, then let's not store anything even if they respond.
         if message.read_only {
             return None;
