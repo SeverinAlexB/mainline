@@ -596,7 +596,7 @@ impl Rpc {
             return None;
         }
 
-        tracing::debug!("Received a response from {}", from);
+        tracing::debug!("Received a response from {}. Message type: {:?}", from, message.message_type);
 
         let mut should_add_node = false;
         let author_id = message.get_author_id();
