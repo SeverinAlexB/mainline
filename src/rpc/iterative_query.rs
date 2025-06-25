@@ -179,7 +179,7 @@ impl IterativeQuery {
             .any(|&tid| socket.inflight(&tid));
 
         if done {
-            debug!(id=?self.target(), closest = ?self.closest.len(), visited = ?self.visited.len(), responders = ?self.responders.len(), "Done query");
+            tracing::info!(id=?self.target(), closest = ?self.closest.len(), visited = ?self.visited.len(), responders = ?self.responders.len(), responses = ?self.responses.len(), "Done query");
         };
 
         done
