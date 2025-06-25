@@ -491,6 +491,7 @@ fn run(config: Config, receiver: Receiver<ActorMessage>) {
         Ok(mut rpc) => {
             let address = rpc.local_addr();
             info!(?address, "Mainline DHT listening");
+            info!("gcp debug");
 
             let mut put_senders = HashMap::new();
             let mut get_senders = HashMap::new();
