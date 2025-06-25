@@ -156,9 +156,12 @@ impl KrpcSocket {
             Err(index) => index,
         };
 
+        let mut count: usize = 0;
         for request in self.inflight_requests.drain(..index) {
-            tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
+            count += 1;
+            tracing::debug!(context = "socket_message_receiving", message = ?request, "Timed out request");
         }
+        tracing::warn!("Removed {} timed out requests", count);
     }
 
     /// Receives a single krpc message on the socket.
