@@ -142,94 +142,101 @@ impl KrpcSocket {
         });
     }
 
-    /// Receives a single krpc message on the socket.
-    /// On success, returns the dht message and the origin.
-    pub fn recv_from(&mut self) -> Option<(Message, SocketAddrV4)> {
-        let mut buf = [0u8; MTU];
-
-        // Cleanup timed-out transaction_ids.
-        // Find the first timedout request, and delete all earlier requests.
-        match self.inflight_requests.binary_search_by(|request| {
+    /// Cleanup timed-out transaction_ids.
+    /// Find the first timedout request, and delete all earlier requests.
+    fn cleanup_timed_out_requests(&mut self) {
+        let index =match self.inflight_requests.binary_search_by(|request| {
             if request.sent_at.elapsed() > self.request_timeout {
                 Ordering::Less
             } else {
                 Ordering::Greater
             }
         }) {
-            Ok(index) => {
-                let iter = self.inflight_requests.drain(..index);
-                for request in iter {
-                    tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
-                }
-            }
-            Err(index) => {
-                let iter = self.inflight_requests.drain(..index);
-                for request in iter {
-                    tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
-                }
-            }
+            Ok(index) => index,
+            Err(index) => index,
         };
 
-        if let Ok((amt, SocketAddr::V4(from))) = self.socket.recv_from(&mut buf) {
-            let bytes = &buf[..amt];
+        for request in self.inflight_requests.drain(..index) {
+            tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
+        }
+    }
 
-            if from.port() == 0 {
-                trace!(
-                    context = "socket_validation",
-                    message = "Response from port 0"
-                );
+    /// Receives a single krpc message on the socket.
+    /// On success, returns the dht message and the origin.
+    pub fn recv_from(&mut self) -> Option<(Message, SocketAddrV4)> {
+        self.cleanup_timed_out_requests();
+
+        let mut buf = [0u8; MTU];
+
+        let (amt, from) = match self.socket.recv_from(&mut buf) {
+            Ok((amt, SocketAddr::V4(from))) => (amt, from),
+            Ok((_, SocketAddr::V6(_))) => {
+                tracing::warn!("Received IPv6 message. Ignoring.");
                 return None;
             }
-
-            match Message::from_bytes(bytes) {
-                Ok(message) => {
-                    // Parsed correctly.
-                    let should_return = match message.message_type {
-                        MessageType::Request(_) => {
-                            trace!(
-                                context = "socket_message_receiving",
-                                ?message,
-                                ?from,
-                                "Received request message"
-                            );
-
-                            true
-                        }
-                        MessageType::Response(_) => {
-                            trace!(
-                                context = "socket_message_receiving",
-                                ?message,
-                                ?from,
-                                "Received response message"
-                            );
-
-                            self.is_expected_response(&message, &from)
-                        }
-                        MessageType::Error(_) => {
-                            trace!(
-                                context = "socket_message_receiving",
-                                ?message,
-                                ?from,
-                                "Received error message"
-                            );
-
-                            self.is_expected_response(&message, &from)
-                        }
-                    };
-
-                    if should_return {
-                        return Some((message, from));
-                    } else {
-                        tracing::warn!(context = "socket_message_receiving", message = ?message, ?from, "Ignoring unexpected response");
-                    }
-                }
-                Err(error) => {
-                    trace!(context = "socket_error", ?error, ?from, message = ?String::from_utf8_lossy(bytes), "Received invalid Bencode message.");
-                }
-            };
+            Err(e) => {
+                tracing::trace!(context = "socket_error", ?e, "Error receiving message");
+                return None;
+            }
         };
 
-        None
+        let bytes = &buf[..amt];
+
+        if from.port() == 0 {
+            tracing::warn!(
+                context = "socket_validation",
+                message = "Response from port 0"
+            );
+            return None;
+        }
+
+        let message = match Message::from_bytes(bytes) {
+            Ok(message) => message,
+            Err(e) => {
+                tracing::warn!(context = "socket_error", ?e, ?from, message = ?String::from_utf8_lossy(bytes), "Received invalid Bencode message.");
+                return None;
+            }
+        };
+
+        let should_return = match message.message_type {
+            MessageType::Request(_) => {
+                trace!(
+                    context = "socket_message_receiving",
+                    ?message,
+                    ?from,
+                    "Received request message"
+                );
+
+                true
+            }
+            MessageType::Response(_) => {
+                trace!(
+                    context = "socket_message_receiving",
+                    ?message,
+                    ?from,
+                    "Received response message"
+                );
+
+                self.is_expected_response(&message, &from)
+            }
+            MessageType::Error(_) => {
+                trace!(
+                    context = "socket_message_receiving",
+                    ?message,
+                    ?from,
+                    "Received error message"
+                );
+
+                self.is_expected_response(&message, &from)
+            }
+        };
+
+        if should_return {
+            return Some((message, from));
+        } else {
+            tracing::warn!(context = "socket_message_receiving", message = ?message, ?from, "Ignoring unexpected response");
+            return None;
+        }
     }
 
     // === Private Methods ===
@@ -252,14 +259,14 @@ impl KrpcSocket {
 
                     return true;
                 } else {
-                    trace!(
+                    tracing::warn!(
                         context = "socket_validation",
                         message = "Response from wrong address"
                     );
                 }
             }
             Err(_) => {
-                trace!(
+                tracing::warn!(
                     context = "socket_validation",
                     message = "Unexpected response id"
                 );
