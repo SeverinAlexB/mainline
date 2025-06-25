@@ -161,7 +161,9 @@ impl KrpcSocket {
             count += 1;
             tracing::debug!(context = "socket_message_receiving", message = ?request, "Timed out request");
         }
-        tracing::warn!("Removed {} timed out requests", count);
+        if count > 0 {
+            tracing::warn!("Removed {} timed out requests", count);
+        }
     }
 
     /// Receives a single krpc message on the socket.
