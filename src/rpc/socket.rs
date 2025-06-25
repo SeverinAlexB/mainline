@@ -219,6 +219,8 @@ impl KrpcSocket {
 
                     if should_return {
                         return Some((message, from));
+                    } else {
+                        trace!(context = "socket_message_receiving", message = ?message, ?from, "Ignoring unexpected response");
                     }
                 }
                 Err(error) => {
