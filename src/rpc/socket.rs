@@ -157,10 +157,16 @@ impl KrpcSocket {
             }
         }) {
             Ok(index) => {
-                self.inflight_requests.drain(..index);
+                let iter = self.inflight_requests.drain(..index);
+                for request in iter {
+                    trace!(context = "socket_message_receiving", message = ?request, "Timed out request");
+                }
             }
             Err(index) => {
-                self.inflight_requests.drain(..index);
+                let iter = self.inflight_requests.drain(..index);
+                for request in iter {
+                    trace!(context = "socket_message_receiving", message = ?request, "Timed out request");
+                }
             }
         };
 
