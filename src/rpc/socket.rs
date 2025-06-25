@@ -159,13 +159,13 @@ impl KrpcSocket {
             Ok(index) => {
                 let iter = self.inflight_requests.drain(..index);
                 for request in iter {
-                    trace!(context = "socket_message_receiving", message = ?request, "Timed out request");
+                    tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
                 }
             }
             Err(index) => {
                 let iter = self.inflight_requests.drain(..index);
                 for request in iter {
-                    trace!(context = "socket_message_receiving", message = ?request, "Timed out request");
+                    tracing::warn!(context = "socket_message_receiving", message = ?request, "Timed out request");
                 }
             }
         };
@@ -220,7 +220,7 @@ impl KrpcSocket {
                     if should_return {
                         return Some((message, from));
                     } else {
-                        trace!(context = "socket_message_receiving", message = ?message, ?from, "Ignoring unexpected response");
+                        tracing::warn!(context = "socket_message_receiving", message = ?message, ?from, "Ignoring unexpected response");
                     }
                 }
                 Err(error) => {
